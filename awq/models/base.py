@@ -160,9 +160,28 @@ class BaseAWQForCausalLM(nn.Module):
             "clip": [],
         }
 
+        def clear_other_layer(layers,i):
+            #mins=max(0,i-10)
+            #maxs=min(79,i+10)
+            for idx in range(10):
+                layer = layers[idx]
+                layers[idx]=layer.to('cpu')
+
+            ten=int(i/10)*10
+
+            #print(f"idx is {i} clear layer 0-10 {ten}-{ten+10}")
+            for i in range(ten,ten+10):
+                layer = layers[i]
+                layers[i]=layer.to('cpu')
+            torch.cuda.empty_cache()
+
         # Run AWQ search layer by layer
         for i in tqdm(range(len(layers)), desc="AWQ Search"):
+
+            clear_other_layer(layers, i)
+            dev = f'cuda:{int(i / 10)}'
             layer = layers[i]
+            layer = layer.to(dev)
             layer = layer.cuda()
             named_linears = get_named_linears(layer)
 
@@ -178,7 +197,7 @@ class BaseAWQForCausalLM(nn.Module):
                 handles.append(named_linears[name].register_forward_hook(
                     functools.partial(cache_input_hook, name=name,
                                     feat_dict=input_feat)))
-            inps = inps.to(next(layer.parameters()).device)  # in case multi-gpu
+            inps = inps.to(dev)  # in case multi-gpu
             # get output as next layer's input
             inps = layer(inps, **layer_kwargs)[0]
             for h in handles:
@@ -336,7 +355,7 @@ class BaseAWQForCausalLM(nn.Module):
         # [STEP 3] Load model
         with init_empty_weights():
             model = AutoModelForCausalLM.from_config(config=config, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code)
-        
+
         # Only need to replace layers if a model is AWQ quantized
         if is_quantized:
             # Prepare WQLinear layers, replace nn.Linear
@@ -346,12 +365,34 @@ class BaseAWQForCausalLM(nn.Module):
 
         device_map = infer_auto_device_map(
             model,
-            no_split_module_classes=[self.layer_type], 
+            no_split_module_classes=[self.layer_type],
             dtype=torch_dtype
         )
 
+
+
         # Load model weights
         if is_quantized:
+            device_map={'model.embed_tokens': 0, 'model.layers.0': 0, 'model.layers.1': 0, 'model.layers.2': 0,
+             'model.layers.3': 0, 'model.layers.4': 0, 'model.layers.5': 0, 'model.layers.6': 0, 'model.layers.7': 0,
+             'model.layers.8': 0, 'model.layers.9': 0, 'model.layers.10': 0, 'model.layers.11': 0, 'model.layers.12': 0,
+             'model.layers.13': 0, 'model.layers.14': 0, 'model.layers.15': 0, 'model.layers.16': 0,
+             'model.layers.17': 0, 'model.layers.18': 0, 'model.layers.19': 0, 'model.layers.20': 1,
+             'model.layers.21': 1, 'model.layers.22': 1, 'model.layers.23': 1, 'model.layers.24': 1,
+             'model.layers.25': 1, 'model.layers.26': 1, 'model.layers.27': 1, 'model.layers.28': 1,
+             'model.layers.29': 1, 'model.layers.30': 1, 'model.layers.31': 1, 'model.layers.32': 1,
+             'model.layers.33': 1, 'model.layers.34': 1, 'model.layers.35': 1, 'model.layers.36': 1,
+             'model.layers.37': 1, 'model.layers.38': 1, 'model.layers.39': 1, 'model.layers.40': 2,
+             'model.layers.41': 2, 'model.layers.42': 2, 'model.layers.43': 2, 'model.layers.44': 2,
+             'model.layers.45': 2, 'model.layers.46': 2, 'model.layers.47': 2, 'model.layers.48': 2,
+             'model.layers.49': 2, 'model.layers.50': 2, 'model.layers.51': 2, 'model.layers.52': 2,
+             'model.layers.53': 2, 'model.layers.54': 2, 'model.layers.55': 2, 'model.layers.56': 2,
+             'model.layers.57': 2, 'model.layers.58': 2, 'model.layers.59': 2, 'model.layers.60': 3,
+             'model.layers.61': 3, 'model.layers.62': 3, 'model.layers.63': 3, 'model.layers.64': 3,
+             'model.layers.65': 3, 'model.layers.66': 3, 'model.layers.67': 3, 'model.layers.68': 3,
+             'model.layers.69': 3, 'model.layers.70': 3, 'model.layers.71': 3, 'model.layers.72': 3,
+             'model.layers.73': 3, 'model.layers.74': 3, 'model.layers.75': 3, 'model.layers.76': 3,
+             'model.layers.77': 3, 'model.layers.78': 3, 'model.layers.79': 3, 'model.norm': 3, 'lm_head': 3}
             load_checkpoint_in_model(
                 model,
                 checkpoint=model_weights_path,
