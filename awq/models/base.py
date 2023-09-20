@@ -46,7 +46,7 @@ class BaseAWQForCausalLM(nn.Module):
     def quantize(self, tokenizer=None, quant_config={}, n_samples=128, seqlen=512,
                        auto_scale=True, mse_range=True, run_search=True, run_quant=True,
                        calib_data: Union[str, List[str]]="pileval", split="train",
-                       text_column="text"):
+                       text_column="content"):
         self.quant_config = quant_config
         quant_config["version"] = "GEMM" if 'version' not in quant_config.keys() else quant_config["version"]
 
@@ -112,7 +112,7 @@ class BaseAWQForCausalLM(nn.Module):
     
     def _awq_search(self, tokenizer, quant_config, n_samples=128, seqlen=512,
                        auto_scale=True, mse_range=True, calib_data:Union[str, List[str]]="pileval",
-                       split="train", text_column="text"):
+                       split="train", text_column="content"):
         layers = self.get_model_layers(self.model)
 
         samples = get_calib_dataset(
@@ -182,7 +182,6 @@ class BaseAWQForCausalLM(nn.Module):
             dev = f'cuda:{int(i / 10)}'
             layer = layers[i]
             layer = layer.to(dev)
-            layer = layer.cuda()
             named_linears = get_named_linears(layer)
 
             # firstly, get input features of all linear layers
